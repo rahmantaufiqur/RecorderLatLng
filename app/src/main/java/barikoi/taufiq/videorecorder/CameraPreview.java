@@ -2,6 +2,7 @@ package barikoi.taufiq.videorecorder;
 
 import android.content.Context;
 
+import android.content.pm.PackageManager;
 import android.graphics.Camera;
 import android.os.Build;
 import android.util.Log;
@@ -31,6 +32,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     public void surfaceCreated(SurfaceHolder holder) {
         // The Surface has been created, now tell the camera where to draw the preview.
         try {
+            
             mCamera.setPreviewDisplay(holder);
             mCamera.startPreview();
         } catch (IOException e) {
@@ -40,6 +42,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
 
     public void surfaceDestroyed(SurfaceHolder holder) {
         // empty. Take care of releasing the Camera preview in your activity.
+        mCamera.release();
     }
 
     public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
@@ -70,4 +73,6 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
             Log.d(TAG, "Error starting camera preview: " + e.getMessage());
         }
     }
+
+
 }
