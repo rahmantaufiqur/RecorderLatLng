@@ -4,7 +4,9 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
@@ -27,6 +29,7 @@ import android.view.MenuItem;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.Toast;
@@ -34,6 +37,7 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -50,9 +54,38 @@ import android.widget.Button;
 import android.widget.VideoView;
 
 import static android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.location.Geocoder;
+import android.preference.PreferenceManager;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
 
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
+import java.util.Timer;
+
+import android.os.Bundle;
+import android.os.Handler;
 public class MainActivity extends AppCompatActivity implements  ActivityCompat.OnRequestPermissionsResultCallback{
 
+    private static final int REQUEST_PERMISSIONS = 100;
+    boolean boolean_permission;
+    SharedPreferences mPref;
+    SharedPreferences.Editor medit;
+    Double latitude, longitude;
+    Geocoder geocoder;
 
     static final int REQUEST_VIDEO_CAPTURE = 1;
 
@@ -70,30 +103,50 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
     private static final int REQUEST_CAMERA = 0;
     private static final int REQUEST_STORAGE = 1;
     private static final int REQUEST_AUDIO = 2;
-    boolean boolean_permission=false;
+    boolean boolean_permission1=false;
     private FrameLayout preview;
+
+    long startTime = 0;
+    int seconds =0;
+    //runs without a timer by reposting this handler at the end of the runnable
+    Handler timerHandler = new Handler();
+    Runnable timerRunnable = new Runnable() {
+
+        @Override
+        public void run() {
+            long millis = System.currentTimeMillis() - startTime;
+            seconds = (int) (millis / 1000);
+            timerHandler.postDelayed(this, 500);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        preview = (FrameLayout) findViewById(R.id.camera_preview);
-        createCamera();
+        preview =
+                findViewById(R.id.camera_preview);
+        fn_permission();
+        requestCameraPermission();
         AudioPermission();
         isStoragePermissionGranted();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        geocoder = new Geocoder(this, Locale.getDefault());
+        mPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        medit = mPref.edit();
     }
 
     private void createCamera(){
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             // Camera permission has not been granted.
-            requestCameraPermission();
-            isStoragePermissionGranted();
+            Toast.makeText(getApplicationContext(), "Please Grant Permissions", Toast.LENGTH_SHORT).show();
         } else {
 
             // Camera permissions is already available, show the camera preview.
             Log.i(TAG,
                     "CAMERA permission has already been granted. Displaying camera preview.");
+            mCamera=null;
             mCamera = getCameraInstance();
             params = mCamera.getParameters();
 
@@ -120,6 +173,26 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                             // inform the user that recording has stopped
                             captureButton.setText("Capture");
                             isRecording = false;
+
+                            Intent myService = new Intent(MainActivity.this, LocationService.class);
+                            stopService(myService);
+                            timerHandler.removeCallbacks(timerRunnable);
+                            medit.putString("service", "").commit();
+                            GpxDbHelper gpxDbHelper=GpxDbHelper.getInstance(MainActivity.this);
+                            gpxDbHelper.open();
+                            ArrayList<Gpx> gpxdata=gpxDbHelper.getGPXData();
+                            gpxDbHelper.close();
+                            Toast.makeText(getApplicationContext(),"Service Stopped",Toast.LENGTH_LONG).show();
+                            new android.support.v7.app.AlertDialog.Builder(MainActivity.this)
+                                    .setTitle("GPX Data")
+                                    .setMessage(gpxdata.get(gpxdata.size()-1).getTime()+" "+gpxdata.get(gpxdata.size()-1).getLat())
+                                    .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                                        public void onClick(DialogInterface dialog, int which) {
+                                         dialog.dismiss();
+                                        }
+                                    })
+                                    .setIcon(android.R.drawable.ic_dialog_alert)
+                                    .show();
                         }
                         else {
                             // initialize video camera
@@ -131,6 +204,23 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                                 // inform the user that recording has started
                                 captureButton.setText("Stop");
                                 isRecording = true;
+                                if (boolean_permission) {
+
+                                    if (mPref.getString("service", "").matches("")) {
+                                        medit.putString("service", "service").commit();
+                                        startTime = System.currentTimeMillis();
+                                        timerHandler.postDelayed(timerRunnable, 0);
+                                        Intent intent = new Intent(getApplicationContext(), LocationService.class);
+                                        startService(intent);
+                                        Toast.makeText(getApplicationContext(), "Service Started", Toast.LENGTH_SHORT).show();
+
+                                    } else {
+                                        Toast.makeText(getApplicationContext(), "Service is already running", Toast.LENGTH_SHORT).show();
+                                    }
+                                } else {
+                                    Toast.makeText(getApplicationContext(), "Please enable the gps", Toast.LENGTH_SHORT).show();
+                                }
+
                             } else {
                                 // prepare didn't work, release the camera
                                 Log.d(TAG," prepare didn't work");
@@ -165,22 +255,23 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
         mMediaRecorder.setCamera(mCamera);
 
         // Step 2: Set sources
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED) {
-            mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
-        }
+
+        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
 
         // Step 3: Set a CamcorderProfile (requires API Level 8 or higher)
-        mMediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH));
+        //mMediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH));
         mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-
+        mMediaRecorder.setAudioEncodingBitRate(196608);
+        mMediaRecorder.setVideoSize(640, 480);
+        mMediaRecorder.setVideoFrameRate(30);
+        mMediaRecorder.setVideoEncodingBitRate(15000000);
+        mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.MPEG_4_SP);
         mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-        mMediaRecorder.setVideoEncodingBitRate(30);
 
         // Step 4: Set output file
-        mMediaRecorder.setOutputFile(getVideoFilePath(this));
-
+        //mMediaRecorder.setOutputFile(getOutputMediaFile(MEDIA_TYPE_VIDEO));
+        mMediaRecorder.setOutputFile(getOutputMediaFile(MEDIA_TYPE_VIDEO).toString());
         // Step 5: Set the preview output
         mMediaRecorder.setPreviewDisplay(mPreview.getHolder().getSurface());
         // Step 6: Prepare configured MediaRecorder
@@ -197,54 +288,106 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
         }
         return true;
     }
-    private String getVideoFilePath(Context context) {
-        final File dir = context.getExternalFilesDir(null);
-        return (dir == null ? "" : (dir.getAbsolutePath() + "/"))
-                + System.currentTimeMillis() + ".mp4";
-    }
-    private  Uri getOutputMediaFileUri(int type){
-        return Uri.fromFile(getOutputMediaFile(type));
-    }
 
     /** Create a File for saving an image or video */
     private File getOutputMediaFile(int type){
+        // To be safe, you should check that the SDCard is mounted
+        // using Environment.getExternalStorageState() before doing this.
+
+        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES), "VideoRecorder");
+        // This location works best if you want the created images to be shared
+        // between applications and persist after your app has been uninstalled.
+
         // Create the storage directory if it does not exist
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-            isStoragePermissionGranted();
-        }
-        else{
-            File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "VideoRecorder`");
-            if (! mediaStorageDir.exists()){
-                if (! mediaStorageDir.mkdirs()){
-                    Log.d(TAG, "failed to create directory");
-                    return null;
-                }
-            }
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-            File mediaFile;
-            if(type == MEDIA_TYPE_VIDEO) {
-                mediaFile = new File(mediaStorageDir.getPath() + File.separator +
-                        "VID_"+ timeStamp + ".mp4");
-            } else {
+        if (! mediaStorageDir.exists()){
+            if (! mediaStorageDir.mkdirs()){
+                Log.d("MyCameraApp", "failed to create directory");
                 return null;
             }
-            return mediaFile;
         }
-        return null;
 
+        // Create a media file name
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        File mediaFile;
+         if(type == MEDIA_TYPE_VIDEO) {
+            mediaFile = new File(mediaStorageDir.getPath() + File.separator +
+                    "VID_"+ timeStamp + ".mp4");
+        } else {
+            return null;
+        }
+
+        return mediaFile;
+    }
+    private void fn_permission() {
+        if ((ContextCompat.checkSelfPermission(getApplicationContext(), android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)) {
+
+            if ((ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, android.Manifest.permission.ACCESS_FINE_LOCATION))) {
+
+
+            } else {
+                ActivityCompat.requestPermissions(MainActivity.this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION
+
+                        },
+                        REQUEST_PERMISSIONS);
+
+            }
+        } else {
+            boolean_permission = true;
+        }
     }
 
+    private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+
+            latitude = Double.valueOf(intent.getStringExtra("latutide"));
+            longitude = Double.valueOf(intent.getStringExtra("longitude"));
+            GpxDbHelper gpxDbHelper= GpxDbHelper.getInstance(MainActivity.this);
+            gpxDbHelper.open();
+            gpxDbHelper.addGps("",latitude,longitude,seconds);
+
+            gpxDbHelper.close();
+
+            List addresses = null;
+            try {
+                addresses = geocoder.getFromLocation(latitude, longitude, 1);
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            }
+        }
+    };
+    
     @Override
     protected void onPause() {
         super.onPause();
         releaseMediaRecorder();       // if you are using MediaRecorder, release it first
-        releaseCamera();              // release the camera immediately on pause event
+        releaseCamera();
+        timerHandler.removeCallbacks(timerRunnable);
+        unregisterReceiver(broadcastReceiver);// release the camera immediately on pause event
     }
+    @Override
+    protected void onResume()
+    {
+        super.onResume();
+        registerReceiver(broadcastReceiver, new IntentFilter(LocationService.str_receiver));
+        try
+        {
+            mCamera.setPreviewCallback(null);
+            mCamera = getCameraInstance();
+            //mCamera.setPreviewCallback(null);
+            mPreview = new CameraPreview(MainActivity.this, mCamera);//set preview
+            preview.addView(mPreview);
 
+        } catch (Exception e){
+            Log.d(TAG, "Error starting camera preview: " + e.getMessage());
+        }
+
+    }
     private void releaseMediaRecorder(){
         if (mMediaRecorder != null) {
             mMediaRecorder.reset();   // clear recorder configuration
+            mPreview.getHolder().removeCallback(mPreview);
             mMediaRecorder.release(); // release the recorder object
             mMediaRecorder = null;
             mCamera.lock();           // lock camera for later use
@@ -253,6 +396,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
 
     private void releaseCamera(){
         if (mCamera != null){
+            mCamera.setPreviewCallback(null);
             mCamera.release();        // release the camera for other applications
             mCamera = null;
         }
@@ -337,6 +481,14 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                     Log.e(TAG, "File Permission Denied, You cannot use local drive .");
                 }
                 break;
+            case REQUEST_PERMISSIONS: {
+                if (grantResults.length > 0 && grantResults[3] == PackageManager.PERMISSION_GRANTED) {
+                    boolean_permission = true;
+
+                } else {
+                    Toast.makeText(getApplicationContext(), "Please allow the permission", Toast.LENGTH_LONG).show();
+                }
+            }
         }
     }
 
