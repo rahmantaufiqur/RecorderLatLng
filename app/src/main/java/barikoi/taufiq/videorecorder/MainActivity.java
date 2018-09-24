@@ -8,6 +8,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
@@ -86,20 +87,12 @@ import org.xmlpull.v1.XmlSerializer;
 
 public class MainActivity extends AppCompatActivity implements  ActivityCompat.OnRequestPermissionsResultCallback{
 
-    private static final int REQUEST_PERMISSIONS = 100;
+
     private static final int XML_TYPE = 10;
     private static final int MULTIPLE_PERMISSIONS = 4;
-    boolean boolean_permission;
     SharedPreferences mPref;
     SharedPreferences.Editor medit;
     Double latitude, longitude;
-    Geocoder geocoder;
-
-    static final int REQUEST_VIDEO_CAPTURE = 1;
-
-    VideoView result_video;
-    private static final int VIDEO_CAPTURE = 101;
-    Uri videoUri;
     private Camera mCamera;
     private CameraPreview mPreview;
     private MediaRecorder mMediaRecorder;
@@ -108,12 +101,8 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
     Camera.Parameters params;
     private boolean isRecording = false;
     public static final String TAG = "MainActivityError";
-    private static final int REQUEST_CAMERA = 0;
-    private static final int REQUEST_STORAGE = 1;
-    private static final int REQUEST_AUDIO = 2;
-    boolean boolean_permission1=false;
     private FrameLayout preview;
-
+    private static String xmlFileName;
     long startTime = 0;
     int seconds =0;
 
@@ -165,12 +154,6 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
             mCamera=null;
             mCamera = getCameraInstance();
             params = mCamera.getParameters();
-
-            List<String> focusModes = params.getSupportedFocusModes();
-            if (focusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
-                params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
-                mCamera.setParameters(params);
-            }
             mPreview = new CameraPreview(this, mCamera);
             preview.addView(mPreview);
         }
@@ -182,6 +165,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                     public void onClick(View v) {
                         if (isRecording) {
                             // stop recording and release camera
+
                             mMediaRecorder.stop();  // stop the recording
                             releaseMediaRecorder(); // release the MediaRecorder object
                             mCamera.lock();         // take camera access back from MediaRecorder
@@ -201,16 +185,6 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                             gpxDbHelper.close();
                             createXmlFromGpxdata(gpxdata);
                             Toast.makeText(getApplicationContext(),"Service Stopped",Toast.LENGTH_LONG).show();
-                            new android.support.v7.app.AlertDialog.Builder(MainActivity.this)
-                                    .setTitle("GPX Data")
-                                    .setMessage(gpxdata.get(gpxdata.size()-1).getTime()+" "+gpxdata.get(gpxdata.size()-1).getLat())
-                                    .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
-                                        public void onClick(DialogInterface dialog, int which) {
-                                         dialog.dismiss();
-                                        }
-                                    })
-                                    .setIcon(android.R.drawable.ic_dialog_alert)
-                                    .show();
                         }
                         else {
                             // initialize video camera
@@ -222,24 +196,18 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                                 // inform the user that recording has started
                                 captureButton.setText("Stop");
                                 isRecording = true;
-                                if (boolean_permission) {
-
-                                    if (mPref.getString("service", "").matches("")) {
-                                        medit.putString("service", "service").commit();
-                                        startTime = System.currentTimeMillis();
-                                        timerHandler.postDelayed(timerRunnable, 0);
-                                        Intent intent = new Intent(getApplicationContext(), LocationService.class);
-                                        startService(intent);
-                                        Toast.makeText(getApplicationContext(), "Service Started", Toast.LENGTH_SHORT).show();
-
-                                    } else {
-                                        Toast.makeText(getApplicationContext(), "Service is already running", Toast.LENGTH_SHORT).show();
-                                    }
+                                if (mPref.getString("service", "").matches("")) {
+                                    medit.putString("service", "service").commit();
+                                    startTime = System.currentTimeMillis();
+                                    timerHandler.postDelayed(timerRunnable, 0);
+                                    Intent intent = new Intent(getApplicationContext(), LocationService.class);
+                                    startService(intent);
+                                    Toast.makeText(getApplicationContext(), "Service Started", Toast.LENGTH_SHORT).show();
                                 } else {
-                                    Toast.makeText(getApplicationContext(), "Please enable the gps", Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(getApplicationContext(), "Service is already running", Toast.LENGTH_SHORT).show();
                                 }
-
-                            } else {
+                            }
+                            else {
                                 // prepare didn't work, release the camera
                                 Log.d(TAG," prepare didn't work");
                                 releaseMediaRecorder();
@@ -264,7 +232,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
     }
     @SuppressLint("NewApi")
     private boolean prepareVideoRecorder(){
-        mCamera = getCameraInstance();
+
         if(mMediaRecorder == null) {
             mMediaRecorder = new MediaRecorder();
         }
@@ -278,17 +246,18 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
 
         // Step 3: Set a CamcorderProfile (requires API Level 8 or higher)
-        //mMediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH));
-        mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+        mMediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH));
+        //mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
         mMediaRecorder.setAudioEncodingBitRate(196608);
+
         mMediaRecorder.setVideoSize(640, 480);
         mMediaRecorder.setVideoFrameRate(30);
         mMediaRecorder.setVideoEncodingBitRate(15000000);
-        mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.MPEG_4_SP);
-        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+       /* mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.MPEG_4_SP);
+        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);*/
+
 
         // Step 4: Set output file
-        //mMediaRecorder.setOutputFile(getOutputMediaFile(MEDIA_TYPE_VIDEO));
         mMediaRecorder.setOutputFile(getOutputMediaFile(MEDIA_TYPE_VIDEO).toString());
         // Step 5: Set the preview output
         mMediaRecorder.setPreviewDisplay(mPreview.getHolder().getSurface());
@@ -331,9 +300,10 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
          if(type == MEDIA_TYPE_VIDEO) {
             mediaFile = new File(mediaStorageDir.getPath() + File.separator +
                     "VID_"+ timeStamp + ".mp4");
+            xmlFileName=timeStamp;
          }else if(type==XML_TYPE){
              mediaFile = new File(mediaStorageDir.getPath() + File.separator +
-                     "VID_"+ timeStamp + ".xml");
+                     "VID_"+ xmlFileName + ".xml");
          } else {
             return null;
         }
@@ -457,7 +427,6 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
             mPreview.getHolder().removeCallback(mPreview);
             mMediaRecorder.release(); // release the recorder object
             mMediaRecorder = null;
-            mCamera.lock();           // lock camera for later use
         }
     }
 

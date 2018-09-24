@@ -11,6 +11,9 @@ import android.view.SurfaceView;
 import android.hardware.camera2.*;
 import java.io.IOException;
 import static android.content.ContentValues.TAG;
+import static android.hardware.Camera.Parameters.FOCUS_MODE_AUTO;
+import static android.hardware.Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE;
+import static android.hardware.Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO;
 
 public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback {
     private SurfaceHolder mHolder;
@@ -32,16 +35,26 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     public void surfaceCreated(SurfaceHolder holder) {
         // The Surface has been created, now tell the camera where to draw the preview.
         try {
-            
             mCamera.setPreviewDisplay(holder);
             mCamera.startPreview();
+
         } catch (IOException e) {
             Log.d(TAG, "Error setting camera preview: " + e.getMessage());
         }
     }
-
+    private void setFocus() {
+        android.hardware.Camera.Parameters mParameters = mCamera.getParameters();
+        if(mParameters.getSupportedFocusModes().contains(FOCUS_MODE_CONTINUOUS_VIDEO)){
+            mParameters.setFocusMode(FOCUS_MODE_CONTINUOUS_VIDEO);
+        }
+        else{
+            mParameters.setFocusMode(FOCUS_MODE_AUTO);
+        }
+        mCamera.setParameters(mParameters);
+    }
     public void surfaceDestroyed(SurfaceHolder holder) {
         // empty. Take care of releasing the Camera preview in your activity.
+        mCamera.setPreviewCallback(null);
         mCamera.release();
     }
 
@@ -65,7 +78,9 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
         // reformatting changes here
 
         // start preview with new settings
+
         try {
+            setFocus();
             mCamera.setPreviewDisplay(mHolder);
             mCamera.startPreview();
 
