@@ -24,6 +24,7 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
+import android.util.Xml;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SurfaceHolder;
@@ -35,6 +36,8 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -78,9 +81,14 @@ import java.util.Timer;
 
 import android.os.Bundle;
 import android.os.Handler;
+
+import org.xmlpull.v1.XmlSerializer;
+
 public class MainActivity extends AppCompatActivity implements  ActivityCompat.OnRequestPermissionsResultCallback{
 
     private static final int REQUEST_PERMISSIONS = 100;
+    private static final int XML_TYPE = 10;
+    private static final int MULTIPLE_PERMISSIONS = 4;
     boolean boolean_permission;
     SharedPreferences mPref;
     SharedPreferences.Editor medit;
@@ -108,6 +116,13 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
 
     long startTime = 0;
     int seconds =0;
+
+    String[] permissions= new String[]{
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_FINE_LOCATION};
+
     //runs without a timer by reposting this handler at the end of the runnable
     Handler timerHandler = new Handler();
     Runnable timerRunnable = new Runnable() {
@@ -119,6 +134,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
             timerHandler.postDelayed(this, 500);
         }
     };
+    private SimpleDateFormat sdf;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -126,14 +142,14 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
         setContentView(R.layout.activity_main);
         preview =
                 findViewById(R.id.camera_preview);
-        fn_permission();
-        requestCameraPermission();
-        AudioPermission();
-        isStoragePermissionGranted();
+        if(checkPermissions()) createCamera();
+
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        geocoder = new Geocoder(this, Locale.getDefault());
+
         mPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         medit = mPref.edit();
+        sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
     }
 
     private void createCamera(){
@@ -181,7 +197,9 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                             GpxDbHelper gpxDbHelper=GpxDbHelper.getInstance(MainActivity.this);
                             gpxDbHelper.open();
                             ArrayList<Gpx> gpxdata=gpxDbHelper.getGPXData();
+                            gpxDbHelper.deleteAllData();
                             gpxDbHelper.close();
+                            createXmlFromGpxdata(gpxdata);
                             Toast.makeText(getApplicationContext(),"Service Stopped",Toast.LENGTH_LONG).show();
                             new android.support.v7.app.AlertDialog.Builder(MainActivity.this)
                                     .setTitle("GPX Data")
@@ -313,28 +331,82 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
          if(type == MEDIA_TYPE_VIDEO) {
             mediaFile = new File(mediaStorageDir.getPath() + File.separator +
                     "VID_"+ timeStamp + ".mp4");
-        } else {
+         }else if(type==XML_TYPE){
+             mediaFile = new File(mediaStorageDir.getPath() + File.separator +
+                     "VID_"+ timeStamp + ".xml");
+         } else {
             return null;
         }
 
         return mediaFile;
     }
-    private void fn_permission() {
-        if ((ContextCompat.checkSelfPermission(getApplicationContext(), android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)) {
 
-            if ((ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, android.Manifest.permission.ACCESS_FINE_LOCATION))) {
-
-
-            } else {
-                ActivityCompat.requestPermissions(MainActivity.this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION
-
-                        },
-                        REQUEST_PERMISSIONS);
-
-            }
-        } else {
-            boolean_permission = true;
+    private void createXmlFromGpxdata(ArrayList<Gpx> gpsdata){
+        File newxmlfile =getOutputMediaFile(XML_TYPE);
+        try {
+            newxmlfile.createNewFile();
+        } catch (IOException e) {
+            Log.e("IOException", "Exception in create new File(");
         }
+
+        FileOutputStream fileos = null;
+        try{
+            fileos = new FileOutputStream(newxmlfile);
+
+        } catch(FileNotFoundException e) {
+            Log.e("FileNotFoundException",e.toString());
+        }
+        XmlSerializer serializer = Xml.newSerializer();
+
+        try {
+            serializer.setOutput(fileos, "UTF-8");
+            serializer.startDocument(null, Boolean.valueOf(true));
+            serializer.setFeature("http://xmlpull.org/v1/doc/features.html#indent-output", true);
+            serializer.startTag(null, "root");
+            for(Gpx data: gpsdata) {
+                serializer.startTag(null, "position");
+                serializer.startTag(null, "date");
+                serializer.text(data.getId());
+                serializer.endTag(null, "date");
+                serializer.startTag(null, "x_loc");
+                serializer.text(data.getLon());
+                serializer.endTag(null, "x_loc");
+                serializer.startTag(null, "time");
+                serializer.text(data.getTime());
+                serializer.endTag(null, "time");
+                serializer.startTag(null, "y_loc");
+                serializer.text(data.getLat());
+                serializer.endTag(null, "y_loc");
+                serializer.startTag(null, "speed");
+                serializer.text("0 km/h");
+                serializer.endTag(null, "speed");
+                serializer.endTag(null, "position");
+            }
+            serializer.endTag(null,"root");
+            serializer.endDocument();
+            serializer.flush();
+            fileos.close();
+            //TextView tv = (TextView)findViewById(R.);
+
+        } catch(Exception e) {
+            Log.e("Exception","Exception occured in wroting");
+        }
+    }
+
+    private  boolean checkPermissions() {
+        int result;
+        List<String> listPermissionsNeeded = new ArrayList<>();
+        for (String p:permissions) {
+            result = ContextCompat.checkSelfPermission(this,p);
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                listPermissionsNeeded.add(p);
+            }
+        }
+        if (!listPermissionsNeeded.isEmpty()) {
+            ActivityCompat.requestPermissions(this, listPermissionsNeeded.toArray(new String[listPermissionsNeeded.size()]),MULTIPLE_PERMISSIONS );
+            return false;
+        }
+        return true;
     }
 
     private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
@@ -345,16 +417,11 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
             longitude = Double.valueOf(intent.getStringExtra("longitude"));
             GpxDbHelper gpxDbHelper= GpxDbHelper.getInstance(MainActivity.this);
             gpxDbHelper.open();
-            gpxDbHelper.addGps("",latitude,longitude,seconds);
+
+            gpxDbHelper.addGps(sdf.format(new Date()),latitude,longitude,seconds);
 
             gpxDbHelper.close();
 
-            List addresses = null;
-            try {
-                addresses = geocoder.getFromLocation(latitude, longitude, 1);
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
         }
     };
     
@@ -401,93 +468,38 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
             mCamera = null;
         }
     }
-    private void requestCameraPermission() {
-        Log.i(TAG, "CAMERA permission has NOT been granted. Requesting permission.");
 
-        // BEGIN_INCLUDE(camera_permission_request)
-        if (ActivityCompat.shouldShowRequestPermissionRationale(this,
-                Manifest.permission.CAMERA)) {
-            // Provide an additional rationale to the user if the permission was not granted
-            // and the user would benefit from additional context for the use of the permission.
-            // For example if the user has previously denied the permission.
-            Log.i(TAG, "Displaying camera permission rationale to provide additional context.");
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA},
-                    REQUEST_CAMERA);
-        } else {
-            // Camera permission has not been granted yet. Request it directly.
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA},
-                    REQUEST_CAMERA);
-        }
-        // END_INCLUDE(camera_permission_request)
-    }
-    private void isStoragePermissionGranted() {
-        if (Build.VERSION.SDK_INT >= 23) {
-            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    == PackageManager.PERMISSION_GRANTED) {
-                Log.v(TAG,"Storage Permission is granted");
-
-            } else {
-
-                Log.v(TAG,"Storage Permission is revoked");
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_STORAGE);
-
-            }
-        }
-        else { //permission is automatically granted on sdk<23 upon installation
-            Log.v(TAG,"Permission is granted");
-        }
-    }
-    private void AudioPermission(){
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
-                    PackageManager.PERMISSION_GRANTED) {
-                // put your code for Version>=Marshmallow
-            } else {
-                if (shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
-                    Toast.makeText(this,
-                            "App required access to audio", Toast.LENGTH_SHORT).show();
-                }
-                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO
-                }, REQUEST_AUDIO);
-            }
-
-        } else {
-            // put your code for Version < Marshmallow
-        }
-    }
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         switch (requestCode) {
-            case REQUEST_CAMERA:
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    createCamera();
-                    Log.e(TAG, "Camera Permission Granted, Now you can use local drive .");
-                } else {
-                    Log.e(TAG, "Camera Permission Denied, You cannot use local drive .");
-                }
-                break;
-            case REQUEST_STORAGE:
-                if (grantResults.length > 0 && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
-                    Log.e(TAG, "File Permission Granted, Now you can use local drive .");
-                } else {
-                    Log.e(TAG, "File Permission Denied, You cannot use local drive .");
-                }
-                break;
-            case REQUEST_AUDIO:
-                if (grantResults.length > 0 && grantResults[2] == PackageManager.PERMISSION_GRANTED) {
-                    Log.e(TAG, "File Permission Granted, Now you can use local drive .");
-                } else {
-                    Log.e(TAG, "File Permission Denied, You cannot use local drive .");
-                }
-                break;
-            case REQUEST_PERMISSIONS: {
-                if (grantResults.length > 0 && grantResults[3] == PackageManager.PERMISSION_GRANTED) {
-                    boolean_permission = true;
+            case MULTIPLE_PERMISSIONS:{
+                if (grantResults.length > 0) {
+                    String permissionsDenied = "";
+                    for (String per : permissions) {
+                        if(grantResults[0] == PackageManager.PERMISSION_DENIED){
+                            permissionsDenied += "\n" + per;
 
-                } else {
-                    Toast.makeText(getApplicationContext(), "Please allow the permission", Toast.LENGTH_LONG).show();
+                        }
+
+                    }
+                    // Show permissionsDenied
+                    if(permissionsDenied.length()>0)
+                    new AlertDialog.Builder(this)
+                            .setMessage("cannot proceed, permission denied:"+permissionsDenied)
+                            .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialogInterface, int i) {
+                                    finish();
+                                }
+                            })
+                            .create()
+                            .show();
+                    else{
+                        createCamera();
+                    }
                 }
+                return;
             }
         }
     }
