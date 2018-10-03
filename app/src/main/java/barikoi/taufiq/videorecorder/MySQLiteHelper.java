@@ -19,6 +19,7 @@ public class MySQLiteHelper extends SQLiteOpenHelper {
     private static final String KEY_LON="lon";
     private static final String KEY_LAT="lat";
     private static final String KEY_ID="ID";
+    private static final String KEY_SPEED = "speed";
 
     private static MySQLiteHelper instance;
 
@@ -38,6 +39,7 @@ public class MySQLiteHelper extends SQLiteOpenHelper {
         String CREATE_OWN_PLACE_TABLE = "CREATE TABLE "+TABLE_NAME+"(" +
                 KEY_ID+" TEXT, "+
                 KEY_TIME+" TEXT, "+
+                KEY_SPEED+" TEXT, "+
                 KEY_LON+" TEXT, "+
                 KEY_LAT+" TEXT);";
 

@@ -17,7 +17,7 @@ public class GpxDbHelper {
     private static final String KEY_LON="lon";
     private static final String KEY_LAT="lat";
     private static final String KEY_ID="ID";
-
+    private static final String KEY_SPEED="speed";
     private static GpxDbHelper instance;
     private static SQLiteDatabase db;
     private static MySQLiteHelper dbHelper;
@@ -45,7 +45,7 @@ public class GpxDbHelper {
         dbHelper.close();
     }
 
-    public synchronized Boolean addGps(String id, double lat, double lon, int time){
+    public synchronized Boolean addGps(String id, double lat, double lon, int time,String speed){
 
 
         // 2. create ContentValues to add key "column"/value
@@ -54,7 +54,7 @@ public class GpxDbHelper {
         values.put(KEY_TIME, time);
         values.put(KEY_LON, lon);
         values.put(KEY_LAT, lat);
-
+        values.put(KEY_SPEED, speed);
 
 
         // 3. insert
@@ -73,6 +73,7 @@ public class GpxDbHelper {
                 KEY_LON,
                 KEY_LAT,
                 KEY_TIME,
+                KEY_SPEED
         };
         Gpx newplace=null;
         ArrayList<Gpx> places = new ArrayList<Gpx>();
@@ -81,7 +82,7 @@ public class GpxDbHelper {
         //Cursor cursor=db.rawQuery(selectquery,null);
         if (cursor.moveToFirst()) {
             do {
-                newplace=new Gpx(cursor.getString(cursor.getColumnIndex(KEY_ID)),cursor.getString(cursor.getColumnIndex(KEY_LAT)),cursor.getString(cursor.getColumnIndex(KEY_LON)),cursor.getString(cursor.getColumnIndex(KEY_TIME)));
+                newplace=new Gpx(cursor.getString(cursor.getColumnIndex(KEY_ID)),cursor.getString(cursor.getColumnIndex(KEY_LAT)),cursor.getString(cursor.getColumnIndex(KEY_LON)),cursor.getString(cursor.getColumnIndex(KEY_TIME)),Float.parseFloat(cursor.getString(cursor.getColumnIndex(KEY_SPEED))));
                 places.add(newplace);
             } while (cursor.moveToNext());
         }
