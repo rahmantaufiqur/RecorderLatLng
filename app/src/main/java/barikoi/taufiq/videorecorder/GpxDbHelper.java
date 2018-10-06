@@ -5,6 +5,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
+import android.util.Log;
 
 import java.util.ArrayList;
 
@@ -21,15 +22,17 @@ public class GpxDbHelper {
     private static GpxDbHelper instance;
     private static SQLiteDatabase db;
     private static MySQLiteHelper dbHelper;
+    private static final String TAG="GpxDbHelper";
+    private int openCount;
 
-    public GpxDbHelper(Context context){
+    public GpxDbHelper(){
 
-        dbHelper=MySQLiteHelper.getInstance(context);
+        //dbHelper=MySQLiteHelper.getInstance(context);
     }
 
-    public static synchronized GpxDbHelper getInstance(Context context){
+    public static synchronized GpxDbHelper getInstance(){
         if(instance==null){
-            instance=new GpxDbHelper(context);
+            instance=new GpxDbHelper();
         }
         return instance;
     }
@@ -37,12 +40,32 @@ public class GpxDbHelper {
     public synchronized boolean isOpen(){
         return db.isOpen();
     }
-    public synchronized void open() throws SQLException {
+    public synchronized void open(Context context) throws SQLException {
+        synchronized (GpxDbHelper.class) {
+            if (openCount++ == 0) {
+                Log.d(TAG, "[open]");
+                dbHelper = MySQLiteHelper.getInstance(context.getApplicationContext());
+                db = dbHelper.getWritableDatabase();
+            }
+            { Log.d(TAG, "[+openCount = " + openCount + "]"); }
+        }
         db = dbHelper.getWritableDatabase();
     }
 
-    public synchronized void close() {
-        dbHelper.close();
+    void close() {
+        synchronized (GpxDbHelper.class) {
+            if (--openCount == 0) {
+                { Log.d(TAG, "[close]"); }
+
+                if (db != null) {
+                    db.close();
+                }
+                if (dbHelper != null) {
+                    dbHelper.close();
+                }
+            }
+             { Log.d(TAG, "[-openCount = " + openCount + "]"); }
+        }
     }
 
     public synchronized Boolean addGps(String id, double lat, double lon, int time,String speed){

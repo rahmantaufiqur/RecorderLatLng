@@ -116,6 +116,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
     //runs without a timer by reposting this handler at the end of the runnable
 
     private SimpleDateFormat sdf;
+    private String timeStamp;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -170,13 +171,17 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                             stopService(myService);
 
                             medit.putString("service", "").commit();
-                            GpxDbHelper gpxDbHelper=GpxDbHelper.getInstance(MainActivity.this);
-                            gpxDbHelper.open();
+                            /*GpxDbHelper gpxDbHelper=GpxDbHelper.getInstance();
+                            gpxDbHelper.open(MainActivity.this);
                             ArrayList<Gpx> gpxdata=gpxDbHelper.getGPXData();
                             gpxDbHelper.deleteAllData();
                             gpxDbHelper.close();
                             createXmlFromGpxdata(gpxdata);
-                            createGPXFromGpxdata(gpxdata);
+                            createGPXFromGpxdata(gpxdata);*/
+
+                            GpxService.startActionXml(MainActivity.this,timeStamp);
+                            GpxService.startActionGPX(MainActivity.this,timeStamp);
+                            GpxService.startActionClear(MainActivity.this);
                             Toast.makeText(getApplicationContext(),"Service Stopped",Toast.LENGTH_LONG).show();
                         }
                         else {
@@ -251,9 +256,9 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
        /* mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.MPEG_4_SP);
         mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);*/
 
-
+        timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         // Step 4: Set output file
-        mMediaRecorder.setOutputFile(getOutputMediaFile(MEDIA_TYPE_VIDEO).toString());
+        mMediaRecorder.setOutputFile(getOutputMediaFile(MEDIA_TYPE_VIDEO,timeStamp).toString());
         // Step 5: Set the preview output
         mMediaRecorder.setPreviewDisplay(mPreview.getHolder().getSurface());
         // Step 6: Prepare configured MediaRecorder
@@ -272,12 +277,12 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
     }
 
     /** Create a File for saving an image or video */
-    private File getOutputMediaFile(int type){
+    private File getOutputMediaFile(int type,String timeStamp){
         // To be safe, you should check that the SDCard is mounted
         // using Environment.getExternalStorageState() before doing this.
 
         File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES), "VideoRecorder");
+                Environment.DIRECTORY_DCIM), "VideoRecorder");
         // This location works best if you want the created images to be shared
         // between applications and persist after your app has been uninstalled.
 
@@ -290,7 +295,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
         }
 
         // Create a media file name
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+
         File mediaFile;
          if(type == MEDIA_TYPE_VIDEO) {
             mediaFile = new File(mediaStorageDir.getPath() + File.separator +
@@ -310,135 +315,8 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
 
         return mediaFile;
     }
-    private void createGPXFromGpxdata(ArrayList<Gpx> gpsdata){
-        String ns_gpx = "http://www.topografix.com/GPX/1/1";
-        String ns_ulogger = "https://github.com/bfabiszewski/ulogger-android/1";
-        String ns_xsi = "http://www.w3.org/2001/XMLSchema-instance";
-        String schemaLocation = ns_gpx + " http://www.topografix.com/GPX/1/1/gpx.xsd " +
-                ns_ulogger + " https://raw.githubusercontent.com/bfabiszewski/ulogger-server/master/scripts/gpx_extensions1.xsd";
 
-        File newxmlfile =getOutputMediaFile(GPX_TYPE);
-        try {
-            newxmlfile.createNewFile();
-        } catch (IOException e) {
-            Log.e("IOException", "Exception in create new File(");
-        }
 
-        FileOutputStream fileos = null;
-        try{
-            fileos = new FileOutputStream(newxmlfile);
-
-        } catch(FileNotFoundException e) {
-            Log.e("FileNotFoundException",e.toString());
-        }
-        XmlSerializer serializer = Xml.newSerializer();
-        try{
-            serializer.setOutput(fileos, "UTF-8");
-            serializer.startDocument("UTF-8", true);
-            serializer.setFeature("http://xmlpull.org/v1/doc/features.html#indent-output", true);
-            serializer.setPrefix("xsi", ns_xsi);
-
-            serializer.startTag(null, "gpx");
-            serializer.attribute(null, "xmlns", ns_gpx);
-            serializer.attribute(ns_xsi, "schemaLocation", schemaLocation);
-            serializer.attribute(null, "version", "1.1");
-            String creator = getString(R.string.app_name) + " " + BuildConfig.VERSION_NAME;
-            serializer.attribute(null, "creator", creator);
-            serializer.startTag(null, "metadata");
-
-            writeTag(serializer, "name", xmlFileName);
-            writeTag(serializer, "time", gpsdata.get(0).getTime());
-            serializer.endTag(null, "metadata");
-
-            // track
-            serializer.startTag(null, "trk");
-            writeTag(serializer, "name", xmlFileName);
-            serializer.startTag(null, "trkseg");
-            for (Gpx data : gpsdata) {
-                serializer.startTag(null, "trkpt");
-                serializer.attribute(null, "lat", data.getLat());
-                serializer.attribute(null, "lon", data.getLon());
-
-                writeTag(serializer, "time", data.getTime());
-                writeTag(serializer, "speed", data.getSpeed()+ " km/h");
-
-                // ulogger extensions (accuracy, speed, bearing, provider)
-
-                serializer.endTag(null, "trkpt");
-            }
-            serializer.endTag(null, "trkseg");
-            serializer.endTag(null, "trk");
-            serializer.endTag(null, "gpx");
-            serializer.endDocument();
-            serializer.flush();
-            fileos.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-    }
-    private void writeTag(@NonNull XmlSerializer serializer, @NonNull String name, @NonNull String text)
-            throws IOException, IllegalArgumentException, IllegalStateException {
-        serializer.startTag(null, name);
-        serializer.text(text);
-        serializer.endTag(null, name);
-    }
-
-    private void createXmlFromGpxdata(ArrayList<Gpx> gpsdata){
-        File newxmlfile =getOutputMediaFile(XML_TYPE);
-        try {
-            newxmlfile.createNewFile();
-        } catch (IOException e) {
-            Log.e("IOException", "Exception in create new File(");
-        }
-
-        FileOutputStream fileos = null;
-        try{
-            fileos = new FileOutputStream(newxmlfile);
-
-        } catch(FileNotFoundException e) {
-            Log.e("FileNotFoundException",e.toString());
-        }
-        XmlSerializer serializer = Xml.newSerializer();
-
-        try {
-            int time=-1;
-            serializer.setOutput(fileos, "UTF-8");
-            serializer.startDocument(null, Boolean.valueOf(true));
-            serializer.setFeature("http://xmlpull.org/v1/doc/features.html#indent-output", true);
-            serializer.startTag(null, "root");
-            for(Gpx data: gpsdata) {
-                if(Integer.parseInt(data.getTime())>time) {
-                    time = Integer.parseInt(data.getTime());
-                    serializer.startTag(null, "position");
-                    serializer.startTag(null, "date");
-                    serializer.text(data.getId());
-                    serializer.endTag(null, "date");
-                    serializer.startTag(null, "x_loc");
-                    serializer.text(data.getLat());
-                    serializer.endTag(null, "x_loc");
-                    serializer.startTag(null, "time");
-                    serializer.text(data.getTime());
-                    serializer.endTag(null, "time");
-                    serializer.startTag(null, "y_loc");
-                    serializer.text(data.getLon());
-                    serializer.endTag(null, "y_loc");
-                    serializer.startTag(null, "speed");
-                    serializer.text(data.getSpeedwithUnit());
-                    serializer.endTag(null, "speed");
-                    serializer.endTag(null, "position");
-                }
-            }
-            serializer.endTag(null,"root");
-            serializer.endDocument();
-            serializer.flush();
-            fileos.close();
-            //TextView tv = (TextView)findViewById(R.);
-
-        } catch(Exception e) {
-            Log.e("Exception","Exception occured in writing");
-        }
-    }
 
     private  boolean checkPermissions() {
         int result;
@@ -464,8 +342,8 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
             latitude = Double.valueOf(intent.getStringExtra("latutide"));
             longitude = Double.valueOf(intent.getStringExtra("longitude"));
 
-            GpxDbHelper gpxDbHelper= GpxDbHelper.getInstance(MainActivity.this);
-            gpxDbHelper.open();
+            GpxDbHelper gpxDbHelper= GpxDbHelper.getInstance();
+            gpxDbHelper.open(MainActivity.this);
 
             gpxDbHelper.addGps(sdf.format(new Date()),latitude,longitude,time,speed);
 
@@ -478,6 +356,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
     protected void onPause() {
         super.onPause();
         releaseMediaRecorder();       // if you are using MediaRecorder, release it first
+        //pauseMediaRecorder();
         releaseCamera();
 
         unregisterReceiver(broadcastReceiver);// release the camera immediately on pause event
@@ -494,6 +373,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
             //mCamera.setPreviewCallback(null);
             mPreview = new CameraPreview(MainActivity.this, mCamera);//set preview
             preview.addView(mPreview);
+            //resumeMediaRecorder();
 
         } catch (Exception e){
             Log.d(TAG, "Error starting camera preview: " + e.getMessage());
@@ -508,7 +388,20 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
             mMediaRecorder = null;
         }
     }
-
+    /*private void pauseMediaRecorder(){
+        if(mMediaRecorder!=null){
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                mMediaRecorder.pause();
+            }
+        }
+    }
+    private void resumeMediaRecorder(){
+        if(mMediaRecorder!=null){
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                mMediaRecorder.resume();
+            }
+        }
+    }*/
     private void releaseCamera(){
         if (mCamera != null){
             mCamera.setPreviewCallback(null);
