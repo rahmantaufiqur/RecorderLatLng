@@ -8,82 +8,33 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraManager;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
-import android.media.session.MediaController;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
-import android.util.Xml;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.Toast;
-
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-
-import android.content.Intent;
-import android.graphics.Bitmap;
-import android.net.Uri;
-import android.provider.MediaStore;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.view.View;
-import android.widget.Button;
-import android.widget.VideoView;
-
-import static android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO;
 import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.location.Geocoder;
 import android.preference.PreferenceManager;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-import android.widget.TextView;
-import android.widget.Toast;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.Locale;
-import java.util.Timer;
-
-import android.os.Bundle;
-import android.os.Handler;
-
-import org.xmlpull.v1.XmlSerializer;
 
 public class MainActivity extends AppCompatActivity implements  ActivityCompat.OnRequestPermissionsResultCallback{
 
@@ -168,7 +119,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                             isRecording = false;
 
                             Intent myService = new Intent(MainActivity.this, LocationTask.class);
-                            stopService(myService);
+                            //stopService(myService);
 
                             medit.putString("service", "").commit();
                             /*GpxDbHelper gpxDbHelper=GpxDbHelper.getInstance();
@@ -178,11 +129,11 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                             gpxDbHelper.close();
                             createXmlFromGpxdata(gpxdata);
                             createGPXFromGpxdata(gpxdata);*/
-
+/*
                             GpxService.startActionXml(MainActivity.this,timeStamp);
                             GpxService.startActionGPX(MainActivity.this,timeStamp);
-                            GpxService.startActionClear(MainActivity.this);
-                            Toast.makeText(getApplicationContext(),"Service Stopped",Toast.LENGTH_LONG).show();
+                            GpxService.startActionClear(MainActivity.this);*/
+                            //Toast.makeText(getApplicationContext(),"Service Stopped",Toast.LENGTH_LONG).show();
                         }
                         else {
                             // initialize video camera
@@ -198,12 +149,12 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                                     medit.putString("service", "service").commit();
 
                                     Intent intent = new Intent(getApplicationContext(), LocationTask.class);
-                                    startService(intent);
-                                    Toast.makeText(getApplicationContext(), "Service Started", Toast.LENGTH_SHORT).show();
+                                    //startService(intent);
+                                   // Toast.makeText(getApplicationContext(), "Service Started", Toast.LENGTH_SHORT).show();
                                 } else {
                                     Intent intent = new Intent(getApplicationContext(), LocationTask.class);
-                                    stopService(intent);
-                                    startService(intent);
+                                    //stopService(intent);
+                                   // startService(intent);
                                     //Toast.makeText(getApplicationContext(), "Service is already running", Toast.LENGTH_SHORT).show();
                                 }
                             }
@@ -355,26 +306,21 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
     @Override
     protected void onPause() {
         super.onPause();
+        pauseMediaRecorder();
         releaseMediaRecorder();       // if you are using MediaRecorder, release it first
-        //pauseMediaRecorder();
         releaseCamera();
-
-        unregisterReceiver(broadcastReceiver);// release the camera immediately on pause event
+        //unregisterReceiver(broadcastReceiver);// release the camera immediately on pause event
     }
     @Override
-    protected void onResume()
-    {
+    protected void onResume() {
         super.onResume();
-        registerReceiver(broadcastReceiver, new IntentFilter(LocationTask.str_receiver));
-        try
-        {
+        resumeMediaRecorder();
+       // registerReceiver(broadcastReceiver, new IntentFilter(LocationTask.str_receiver));
+        try {
             mCamera.setPreviewCallback(null);
-            mCamera = getCameraInstance();
-            //mCamera.setPreviewCallback(null);
+            mCamera = Camera.open();
             mPreview = new CameraPreview(MainActivity.this, mCamera);//set preview
             preview.addView(mPreview);
-            //resumeMediaRecorder();
-
         } catch (Exception e){
             Log.d(TAG, "Error starting camera preview: " + e.getMessage());
         }
@@ -388,7 +334,7 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
             mMediaRecorder = null;
         }
     }
-    /*private void pauseMediaRecorder(){
+    private void pauseMediaRecorder(){
         if(mMediaRecorder!=null){
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 mMediaRecorder.pause();
@@ -401,13 +347,20 @@ public class MainActivity extends AppCompatActivity implements  ActivityCompat.O
                 mMediaRecorder.resume();
             }
         }
-    }*/
+    }
     private void releaseCamera(){
         if (mCamera != null){
             mCamera.setPreviewCallback(null);
             mCamera.release();        // release the camera for other applications
             mCamera = null;
         }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        releaseMediaRecorder();
+        releaseCamera();
     }
 
     @Override
